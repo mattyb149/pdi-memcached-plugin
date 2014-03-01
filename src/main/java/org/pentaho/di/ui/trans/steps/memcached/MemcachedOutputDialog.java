@@ -50,22 +50,21 @@ import org.eclipse.swt.widgets.Text;
 import org.pentaho.di.core.Const;
 import org.pentaho.di.core.exception.KettleException;
 import org.pentaho.di.core.row.RowMetaInterface;
-import org.pentaho.di.core.row.ValueMeta;
 import org.pentaho.di.i18n.BaseMessages;
 import org.pentaho.di.trans.TransMeta;
 import org.pentaho.di.trans.step.BaseStepMeta;
 import org.pentaho.di.trans.step.StepDialogInterface;
-import org.pentaho.di.trans.steps.memcached.MemcachedInputMeta;
+import org.pentaho.di.trans.steps.memcached.MemcachedOutputMeta;
 import org.pentaho.di.ui.core.dialog.ErrorDialog;
 import org.pentaho.di.ui.core.widget.ColumnInfo;
 import org.pentaho.di.ui.core.widget.TableView;
 import org.pentaho.di.ui.core.widget.TextVar;
 import org.pentaho.di.ui.trans.step.BaseStepDialog;
 
-public class MemcachedInputDialog extends BaseStepDialog implements StepDialogInterface {
-  private static Class<?> PKG = MemcachedInputMeta.class; // for i18n purposes, needed by Translator2!! $NON-NLS-1$
+public class MemcachedOutputDialog extends BaseStepDialog implements StepDialogInterface {
+  private static Class<?> PKG = MemcachedOutputMeta.class; // for i18n purposes, needed by Translator2!! $NON-NLS-1$
 
-  private MemcachedInputMeta input;
+  private MemcachedOutputMeta input;
   private boolean gotPreviousFields = false;
   private RowMetaInterface previousFields;
 
@@ -74,21 +73,21 @@ public class MemcachedInputDialog extends BaseStepDialog implements StepDialogIn
   private FormData fdlKeyField, fdKeyField;
 
   private Label wlValueField;
-  private TextVar wValueField;
+  private CCombo wValueField;
   private FormData fdlValueField, fdValueField;
 
-  private Label wlTypeField;
-  private CCombo wTypeField;
-  private FormData fdlTypeField, fdTypeField;
+  private Label wlExpirationTime;
+  private TextVar wExpirationTime;
+  private FormData fdlExpirationTime, fdExpirationTime;
 
   private Composite wServersComp;
   private Label wlServers;
   private TableView wServers;
   private FormData fdlServers, fdServers;
 
-  public MemcachedInputDialog( Shell parent, Object in, TransMeta tr, String sname ) {
+  public MemcachedOutputDialog( Shell parent, Object in, TransMeta tr, String sname ) {
     super( parent, (BaseStepMeta) in, tr, sname );
-    input = (MemcachedInputMeta) in;
+    input = (MemcachedOutputMeta) in;
   }
 
   public String open() {
@@ -111,14 +110,14 @@ public class MemcachedInputDialog extends BaseStepDialog implements StepDialogIn
     formLayout.marginHeight = Const.FORM_MARGIN;
 
     shell.setLayout( formLayout );
-    shell.setText( BaseMessages.getString( PKG, "MemcachedInputDialog.Shell.Title" ) );
+    shell.setText( BaseMessages.getString( PKG, "MemcachedOutputDialog.Shell.Title" ) );
 
     int middle = props.getMiddlePct();
     int margin = Const.MARGIN;
 
     // Stepname line
     wlStepname = new Label( shell, SWT.RIGHT );
-    wlStepname.setText( BaseMessages.getString( PKG, "MemcachedInputDialog.Stepname.Label" ) );
+    wlStepname.setText( BaseMessages.getString( PKG, "MemcachedOutputDialog.Stepname.Label" ) );
     props.setLook( wlStepname );
     fdlStepname = new FormData();
     fdlStepname.left = new FormAttachment( 0, 0 );
@@ -137,7 +136,7 @@ public class MemcachedInputDialog extends BaseStepDialog implements StepDialogIn
 
     // Key field
     wlKeyField = new Label( shell, SWT.RIGHT );
-    wlKeyField.setText( BaseMessages.getString( PKG, "MemcachedInputDialog.KeyField.Label" ) );
+    wlKeyField.setText( BaseMessages.getString( PKG, "MemcachedOutputDialog.KeyField.Label" ) );
     props.setLook( wlKeyField );
     fdlKeyField = new FormData();
     fdlKeyField.left = new FormAttachment( 0, 0 );
@@ -167,14 +166,14 @@ public class MemcachedInputDialog extends BaseStepDialog implements StepDialogIn
 
     // Value field
     wlValueField = new Label( shell, SWT.RIGHT );
-    wlValueField.setText( BaseMessages.getString( PKG, "MemcachedInputDialog.ValueField.Label" ) );
+    wlValueField.setText( BaseMessages.getString( PKG, "MemcachedOutputDialog.ValueField.Label" ) );
     props.setLook( wlValueField );
     fdlValueField = new FormData();
     fdlValueField.left = new FormAttachment( 0, 0 );
     fdlValueField.right = new FormAttachment( middle, -margin );
     fdlValueField.top = new FormAttachment( wKeyField, margin );
     wlValueField.setLayoutData( fdlValueField );
-    wValueField = new TextVar( transMeta, shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER );
+    wValueField = new CCombo( shell, SWT.BORDER | SWT.READ_ONLY );
     props.setLook( wValueField );
     wValueField.addModifyListener( lsMod );
     fdValueField = new FormData();
@@ -182,35 +181,46 @@ public class MemcachedInputDialog extends BaseStepDialog implements StepDialogIn
     fdValueField.top = new FormAttachment( wKeyField, margin );
     fdValueField.right = new FormAttachment( 100, 0 );
     wValueField.setLayoutData( fdValueField );
+    wValueField.addFocusListener( new FocusListener() {
+      public void focusLost( org.eclipse.swt.events.FocusEvent e ) {
+      }
+
+      public void focusGained( org.eclipse.swt.events.FocusEvent e ) {
+        Cursor busy = new Cursor( shell.getDisplay(), SWT.CURSOR_WAIT );
+        shell.setCursor( busy );
+        getFieldsInto( wValueField );
+        shell.setCursor( null );
+        busy.dispose();
+      }
+    } );
 
     // Type field
-    wlTypeField = new Label( shell, SWT.RIGHT );
-    wlTypeField.setText( BaseMessages.getString( PKG, "MemcachedInputDialog.TypeField.Label" ) );
-    props.setLook( wlTypeField );
-    fdlTypeField = new FormData();
-    fdlTypeField.left = new FormAttachment( 0, 0 );
-    fdlTypeField.right = new FormAttachment( middle, -margin );
-    fdlTypeField.top = new FormAttachment( wValueField, margin );
-    wlTypeField.setLayoutData( fdlTypeField );
-    wTypeField = new CCombo( shell, SWT.BORDER | SWT.READ_ONLY );
-    props.setLook( wTypeField );
-    wTypeField.addModifyListener( lsMod );
-    fdTypeField = new FormData();
-    fdTypeField.left = new FormAttachment( middle, 0 );
-    fdTypeField.top = new FormAttachment( wValueField, margin );
-    fdTypeField.right = new FormAttachment( 100, 0 );
-    wTypeField.setLayoutData( fdTypeField );
-    wTypeField.setItems( ValueMeta.getAllTypes() );
+    wlExpirationTime = new Label( shell, SWT.RIGHT );
+    wlExpirationTime.setText( BaseMessages.getString( PKG, "MemcachedOutputDialog.ExpirationTime.Label" ) );
+    props.setLook( wlExpirationTime );
+    fdlExpirationTime = new FormData();
+    fdlExpirationTime.left = new FormAttachment( 0, 0 );
+    fdlExpirationTime.right = new FormAttachment( middle, -margin );
+    fdlExpirationTime.top = new FormAttachment( wValueField, margin );
+    wlExpirationTime.setLayoutData( fdlExpirationTime );
+    wExpirationTime = new TextVar( transMeta, shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER );
+    props.setLook( wExpirationTime );
+    wExpirationTime.addModifyListener( lsMod );
+    fdExpirationTime = new FormData();
+    fdExpirationTime.left = new FormAttachment( middle, 0 );
+    fdExpirationTime.top = new FormAttachment( wValueField, margin );
+    fdExpirationTime.right = new FormAttachment( 100, 0 );
+    wExpirationTime.setLayoutData( fdExpirationTime );
 
     ColumnInfo[] colinf =
         new ColumnInfo[] {
-          new ColumnInfo( BaseMessages.getString( PKG, "MemcachedInputDialog.HostName.Column" ),
+          new ColumnInfo( BaseMessages.getString( PKG, "MemcachedOutputDialog.HostName.Column" ),
               ColumnInfo.COLUMN_TYPE_TEXT, false ),
-          new ColumnInfo( BaseMessages.getString( PKG, "MemcachedInputDialog.Port.Column" ),
+          new ColumnInfo( BaseMessages.getString( PKG, "MemcachedOutputDialog.Port.Column" ),
               ColumnInfo.COLUMN_TYPE_TEXT, false ), };
 
     // Servers
-    wServersComp = new Composite( wTypeField, SWT.NONE );
+    wServersComp = new Composite( wExpirationTime, SWT.NONE );
     props.setLook( wServersComp );
 
     FormLayout fileLayout = new FormLayout();
@@ -219,12 +229,12 @@ public class MemcachedInputDialog extends BaseStepDialog implements StepDialogIn
     wServersComp.setLayout( fileLayout );
 
     wlServers = new Label( shell, SWT.RIGHT );
-    wlServers.setText( BaseMessages.getString( PKG, "MemcachedInputDialog.Servers.Label" ) );
+    wlServers.setText( BaseMessages.getString( PKG, "MemcachedOutputDialog.Servers.Label" ) );
     props.setLook( wlServers );
     fdlServers = new FormData();
     fdlServers.left = new FormAttachment( 0, 0 );
-    fdlServers.right = new FormAttachment( middle/4, -margin );
-    fdlServers.top = new FormAttachment( wTypeField, margin );
+    fdlServers.right = new FormAttachment( middle / 4, -margin );
+    fdlServers.top = new FormAttachment( wExpirationTime, margin );
     wlServers.setLayoutData( fdlServers );
 
     wServers =
@@ -232,8 +242,8 @@ public class MemcachedInputDialog extends BaseStepDialog implements StepDialogIn
             props );
 
     fdServers = new FormData();
-    fdServers.left = new FormAttachment( middle/4, 0 );
-    fdServers.top = new FormAttachment( wTypeField, margin*2 );
+    fdServers.left = new FormAttachment( middle / 4, 0 );
+    fdServers.top = new FormAttachment( wExpirationTime, margin * 2 );
     fdServers.right = new FormAttachment( 100, 0 );
     // fdServers.bottom = new FormAttachment( 100, 0 );
     wServers.setLayoutData( fdServers );
@@ -300,9 +310,7 @@ public class MemcachedInputDialog extends BaseStepDialog implements StepDialogIn
     if ( !Const.isEmpty( input.getValueFieldName() ) ) {
       wValueField.setText( input.getValueFieldName() );
     }
-    if ( !Const.isEmpty( input.getValueTypeName() ) ) {
-      wTypeField.setText( input.getValueTypeName() );
-    }
+    wExpirationTime.setText( Integer.toString( input.getExpirationTime() ) );
 
     int i = 0;
     Set<InetSocketAddress> servers = input.getServers();
@@ -316,7 +324,7 @@ public class MemcachedInputDialog extends BaseStepDialog implements StepDialogIn
         item.setText( col++, Integer.toString( addr.getPort() ) );
       }
     }
-    
+
     wServers.setRowNums();
     wServers.optWidth( true );
 
@@ -337,7 +345,7 @@ public class MemcachedInputDialog extends BaseStepDialog implements StepDialogIn
     stepname = wStepname.getText(); // return value
     input.setKeyFieldName( wKeyField.getText() );
     input.setValueFieldName( wValueField.getText() );
-    input.setValueTypeName( wTypeField.getText() );
+    input.setExpirationTime( Integer.parseInt( wExpirationTime.getText() ) );
 
     int nrServers = wServers.nrNonEmpty();
 
@@ -371,8 +379,8 @@ public class MemcachedInputDialog extends BaseStepDialog implements StepDialogIn
       gotPreviousFields = true;
 
     } catch ( KettleException ke ) {
-      new ErrorDialog( shell, BaseMessages.getString( PKG, "MemcachedInputDialog.FailedToGetFields.DialogTitle" ),
-          BaseMessages.getString( PKG, "MemcachedInputDialog.FailedToGetFields.DialogMessage" ), ke );
+      new ErrorDialog( shell, BaseMessages.getString( PKG, "MemcachedOutputDialog.FailedToGetFields.DialogTitle" ),
+          BaseMessages.getString( PKG, "MemcachedOutputDialog.FailedToGetFields.DialogMessage" ), ke );
     }
   }
 }

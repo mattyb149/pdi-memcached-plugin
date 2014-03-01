@@ -5,3 +5,6 @@ def memcachedClient = new MemcachedClient( new InetSocketAddress('127.0.0.1', 11
 
 memcachedClient.set('myKey',3600, "Hello world!")
 memcachedClient.set('intKey',3600, 45)
+
+println "myKey = ${memcachedClient.get('myKey')}"
+println "intKey = ${memcachedClient.get('intKey')}"

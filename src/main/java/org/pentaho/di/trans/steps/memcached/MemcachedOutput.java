@@ -28,7 +28,6 @@ import java.util.Set;
 import net.spy.memcached.MemcachedClient;
 
 import org.pentaho.di.core.exception.KettleException;
-import org.pentaho.di.core.row.RowDataUtil;
 import org.pentaho.di.i18n.BaseMessages;
 import org.pentaho.di.trans.Trans;
 import org.pentaho.di.trans.TransMeta;
@@ -39,18 +38,18 @@ import org.pentaho.di.trans.step.StepMeta;
 import org.pentaho.di.trans.step.StepMetaInterface;
 
 /**
- * The Memcached Input step looks up value objects, from the given key names, from memached server(s).
+ * The Memcached Output step stores value objects, for the given key names, to memached server(s).
  * 
  */
-public class MemcachedInput extends BaseStep implements StepInterface {
-  private static Class<?> PKG = MemcachedInputMeta.class; // for i18n purposes, needed by Translator2!! $NON-NLS-1$
+public class MemcachedOutput extends BaseStep implements StepInterface {
+  private static Class<?> PKG = MemcachedOutputMeta.class; // for i18n purposes, needed by Translator2!! $NON-NLS-1$
 
-  protected MemcachedInputMeta meta;
-  protected MemcachedInputData data;
+  protected MemcachedOutputMeta meta;
+  protected MemcachedOutputData data;
 
   protected MemcachedClient memcachedClient = null;
 
-  public MemcachedInput( StepMeta stepMeta, StepDataInterface stepDataInterface, int copyNr, TransMeta transMeta,
+  public MemcachedOutput( StepMeta stepMeta, StepDataInterface stepDataInterface, int copyNr, TransMeta transMeta,
       Trans trans ) {
     super( stepMeta, stepDataInterface, copyNr, transMeta, trans );
   }
@@ -60,13 +59,12 @@ public class MemcachedInput extends BaseStep implements StepInterface {
     if ( super.init( smi, sdi ) ) {
       try {
         // Create client and connect to memcached server(s)
-        Set<InetSocketAddress> servers = ( (MemcachedInputMeta) smi ).getServers();
-        // new InetSocketAddress( "localhost", 11211 )
+        Set<InetSocketAddress> servers = ( (MemcachedOutputMeta) smi ).getServers();
         memcachedClient = new MemcachedClient( servers.toArray( new InetSocketAddress[servers.size()] ) );
 
         return true;
       } catch ( Exception e ) {
-        logError( BaseMessages.getString( PKG, "MemcachedInput.Error.ConnectError" ), e );
+        logError( BaseMessages.getString( PKG, "MemcachedOutput.Error.ConnectError" ), e );
         return false;
       }
     } else {
@@ -75,8 +73,8 @@ public class MemcachedInput extends BaseStep implements StepInterface {
   }
 
   public boolean processRow( StepMetaInterface smi, StepDataInterface sdi ) throws KettleException {
-    meta = (MemcachedInputMeta) smi;
-    data = (MemcachedInputData) sdi;
+    meta = (MemcachedOutputMeta) smi;
+    data = (MemcachedOutputData) sdi;
 
     Object[] r = getRow(); // get row, set busy!
 
@@ -96,30 +94,25 @@ public class MemcachedInput extends BaseStep implements StepInterface {
 
     }
 
+    Object[] outputRowData = r;
+    
     // Get value from memcached, don't cast now, be lazy. TODO change this?
     int keyFieldIndex = getInputRowMeta().indexOfValue( meta.getKeyFieldName() );
     if ( keyFieldIndex < 0 ) {
-      throw new KettleException( BaseMessages.getString( PKG, "MemcachedInputMeta.Exception.KeyFieldNameNotFound" ) );
+      throw new KettleException( BaseMessages.getString( PKG, "MemcachedOutputMeta.Exception.KeyFieldNameNotFound" ) );
     }
-
-    Object fetchedValue = memcachedClient.get( (String) ( r[keyFieldIndex] ) );
-
-    // Add Value data name to output, or set value data if already exists
-    Object[] outputRowData = r;
     int valueFieldIndex = getInputRowMeta().indexOfValue( meta.getValueFieldName() );
-    if ( valueFieldIndex < 0 || valueFieldIndex > outputRowData.length ) {
-      // Not found so add it
-      outputRowData = RowDataUtil.addValueData( r, getInputRowMeta().size(), fetchedValue );
-    } else {
-      // Update value in place
-      outputRowData[valueFieldIndex] = fetchedValue;
+    if ( valueFieldIndex < 0 ) {
+      throw new KettleException( BaseMessages.getString( PKG, "MemcachedOutputMeta.Exception.ValueFieldNameNotFound" ) );
     }
+    
+    memcachedClient.set( (String) ( r[keyFieldIndex] ), meta.getExpirationTime(), (String) ( r[valueFieldIndex] ) );
 
     putRow( data.outputRowMeta, outputRowData ); // copy row to possible alternate rowset(s).
 
     if ( checkFeedback( getLinesRead() ) ) {
       if ( log.isBasic() )
-        logBasic( BaseMessages.getString( PKG, "MemcachedInput.Log.LineNumber" ) + getLinesRead() );
+        logBasic( BaseMessages.getString( PKG, "MemcachedOutput.Log.LineNumber" ) + getLinesRead() );
     }
 
     return true;

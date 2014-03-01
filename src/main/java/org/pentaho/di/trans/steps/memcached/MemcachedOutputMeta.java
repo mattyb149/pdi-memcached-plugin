@@ -33,13 +33,9 @@ import org.pentaho.di.core.Const;
 import org.pentaho.di.core.annotations.Step;
 import org.pentaho.di.core.database.DatabaseMeta;
 import org.pentaho.di.core.exception.KettleException;
-import org.pentaho.di.core.exception.KettlePluginException;
 import org.pentaho.di.core.exception.KettleStepException;
 import org.pentaho.di.core.exception.KettleXMLException;
 import org.pentaho.di.core.row.RowMetaInterface;
-import org.pentaho.di.core.row.ValueMeta;
-import org.pentaho.di.core.row.ValueMetaInterface;
-import org.pentaho.di.core.row.value.ValueMetaFactory;
 import org.pentaho.di.core.variables.VariableSpace;
 import org.pentaho.di.core.xml.XMLHandler;
 import org.pentaho.di.i18n.BaseMessages;
@@ -56,20 +52,20 @@ import org.pentaho.metastore.api.IMetaStore;
 import org.w3c.dom.Node;
 
 /**
- * The Memcached Input step looks up value objects, from the given key names, from memached server(s).
+ * The Memcached Output step writes value objects, for the given key names, to memached server(s).
  * 
  */
-@Step( id = "MemcachedInput", image = "memcached-input.png", name = "Memcached Input",
-    description = "Reads from a memcached instance", categoryDescription = "Input" )
-public class MemcachedInputMeta extends BaseStepMeta implements StepMetaInterface {
-  private static Class<?> PKG = MemcachedInputMeta.class; // for i18n purposes, needed by Translator2!! $NON-NLS-1$
+@Step( id = "MemcachedOutput", image = "memcached-output.png", name = "Memcached Output",
+    description = "Writes to a memcached instance", categoryDescription = "Output" )
+public class MemcachedOutputMeta extends BaseStepMeta implements StepMetaInterface {
+  private static Class<?> PKG = MemcachedOutputMeta.class; // for i18n purposes, needed by Translator2!! $NON-NLS-1$
 
   private String keyFieldName;
   private String valueFieldName;
-  private String valueTypeName;
+  private int expirationTime;
   private Set<InetSocketAddress> servers;
 
-  public MemcachedInputMeta() {
+  public MemcachedOutputMeta() {
     super(); // allocate BaseStepMeta
   }
 
@@ -78,10 +74,10 @@ public class MemcachedInputMeta extends BaseStepMeta implements StepMetaInterfac
   }
 
   public Object clone() {
-    MemcachedInputMeta retval = (MemcachedInputMeta) super.clone();
+    MemcachedOutputMeta retval = (MemcachedOutputMeta) super.clone();
     retval.setKeyFieldName( this.keyFieldName );
     retval.setValueFieldName( this.valueFieldName );
-    retval.setValueTypeName( this.valueTypeName );
+    retval.setExpirationTime( this.expirationTime );
     return retval;
   }
 
@@ -92,32 +88,13 @@ public class MemcachedInputMeta extends BaseStepMeta implements StepMetaInterfac
   public void setDefault() {
     this.keyFieldName = null;
     this.valueFieldName = null;
-    this.valueTypeName = null;
+    this.expirationTime = 0;
   }
 
   public void getFields( RowMetaInterface inputRowMeta, String origin, RowMetaInterface[] info, StepMeta nextStep,
       VariableSpace space, Repository repository, IMetaStore metaStore ) throws KettleStepException {
-    if ( !Const.isEmpty( this.valueFieldName ) ) {
 
-      // Add value field meta if not found, else set it
-      ValueMetaInterface v;
-      try {
-        v = ValueMetaFactory.createValueMeta( this.valueFieldName, ValueMeta.getType( this.valueTypeName ) );
-      } catch ( KettlePluginException e ) {
-        throw new KettleStepException( BaseMessages.getString( PKG,
-            "MemcachedInputMeta.Exception.ValueTypeNameNotFound" ), e );
-      }
-      v.setOrigin( origin );
-      int valueFieldIndex = inputRowMeta.indexOfValue( this.valueFieldName );
-      if ( valueFieldIndex < 0 ) {
-        inputRowMeta.addValueMeta( v );
-      } else {
-        inputRowMeta.setValueMeta( valueFieldIndex, v );
-      }
-    } else {
-      throw new KettleStepException( BaseMessages
-          .getString( PKG, "MemcachedInputMeta.Exception.ValueFieldNameNotFound" ) );
-    }
+    super.getFields( inputRowMeta, origin, info, nextStep, space, repository, metaStore );
   }
 
   public void check( List<CheckResultInterface> remarks, TransMeta transMeta, StepMeta stepMeta, RowMetaInterface prev,
@@ -127,12 +104,12 @@ public class MemcachedInputMeta extends BaseStepMeta implements StepMetaInterfac
     if ( prev == null || prev.size() == 0 ) {
       cr =
           new CheckResult( CheckResultInterface.TYPE_RESULT_WARNING, BaseMessages.getString( PKG,
-              "MemcachedInputMeta.CheckResult.NotReceivingFields" ), stepMeta );
+              "MemcachedOutputMeta.CheckResult.NotReceivingFields" ), stepMeta );
       remarks.add( cr );
     } else {
       cr =
           new CheckResult( CheckResultInterface.TYPE_RESULT_OK, BaseMessages.getString( PKG,
-              "MemcachedInputMeta.CheckResult.StepRecevingData", prev.size() + "" ), stepMeta );
+              "MemcachedOutputMeta.CheckResult.StepRecevingData", prev.size() + "" ), stepMeta );
       remarks.add( cr );
     }
 
@@ -140,23 +117,23 @@ public class MemcachedInputMeta extends BaseStepMeta implements StepMetaInterfac
     if ( input.length > 0 ) {
       cr =
           new CheckResult( CheckResultInterface.TYPE_RESULT_OK, BaseMessages.getString( PKG,
-              "MemcachedInputMeta.CheckResult.StepRecevingData2" ), stepMeta );
+              "MemcachedOutputMeta.CheckResult.StepRecevingData2" ), stepMeta );
       remarks.add( cr );
     } else {
       cr =
           new CheckResult( CheckResultInterface.TYPE_RESULT_ERROR, BaseMessages.getString( PKG,
-              "MemcachedInputMeta.CheckResult.NoInputReceivedFromOtherSteps" ), stepMeta );
+              "MemcachedOutputMeta.CheckResult.NoInputReceivedFromOtherSteps" ), stepMeta );
       remarks.add( cr );
     }
   }
 
   public StepInterface getStep( StepMeta stepMeta, StepDataInterface stepDataInterface, int cnr, TransMeta tr,
       Trans trans ) {
-    return new MemcachedInput( stepMeta, stepDataInterface, cnr, tr, trans );
+    return new MemcachedOutput( stepMeta, stepDataInterface, cnr, tr, trans );
   }
 
   public StepDataInterface getStepData() {
-    return new MemcachedInputData();
+    return new MemcachedOutputData();
   }
 
   public String getKeyFieldName() {
@@ -175,12 +152,12 @@ public class MemcachedInputMeta extends BaseStepMeta implements StepMetaInterfac
     this.valueFieldName = valueFieldName;
   }
 
-  public String getValueTypeName() {
-    return valueTypeName;
+  public int getExpirationTime() {
+    return expirationTime;
   }
 
-  public void setValueTypeName( String mapFieldName ) {
-    this.valueTypeName = mapFieldName;
+  public void setExpirationTime( int expirationTime ) {
+    this.expirationTime = expirationTime;
   }
 
   @Override
@@ -188,8 +165,9 @@ public class MemcachedInputMeta extends BaseStepMeta implements StepMetaInterfac
     StringBuffer retval = new StringBuffer();
     retval.append( "    " + XMLHandler.addTagValue( "keyfield", this.getKeyFieldName() ) );
     retval.append( "    " + XMLHandler.addTagValue( "valuefield", this.getValueFieldName() ) );
-    retval.append( "    " + XMLHandler.addTagValue( "valuetype", this.getValueTypeName() ) );
+    retval.append( "    " + XMLHandler.addTagValue( "expiration", this.getExpirationTime() ) );
     retval.append( "    <servers>" ).append( Const.CR );
+
     Set<InetSocketAddress> servers = this.getServers();
     if ( servers != null ) {
       for ( InetSocketAddress addr : servers ) {
@@ -208,7 +186,7 @@ public class MemcachedInputMeta extends BaseStepMeta implements StepMetaInterfac
     try {
       this.keyFieldName = XMLHandler.getTagValue( stepnode, "keyfield" );
       this.valueFieldName = XMLHandler.getTagValue( stepnode, "valuefield" );
-      this.valueTypeName = XMLHandler.getTagValue( stepnode, "valuetype" );
+      this.expirationTime = Integer.parseInt( XMLHandler.getTagValue( stepnode, "expiration" ) );
       Node serverNodes = XMLHandler.getSubNode( stepnode, "servers" );
       int nrservers = XMLHandler.countNodes( serverNodes, "server" );
 
@@ -222,7 +200,7 @@ public class MemcachedInputMeta extends BaseStepMeta implements StepMetaInterfac
         servers.add( new InetSocketAddress( hostname, port ) );
       }
     } catch ( Exception e ) {
-      throw new KettleXMLException( BaseMessages.getString( PKG, "MemcachedInputMeta.Exception.UnableToReadStepInfo" ),
+      throw new KettleXMLException( BaseMessages.getString( PKG, "MemcachedOutputMeta.Exception.UnableToReadStepInfo" ),
           e );
     }
   }
@@ -232,7 +210,7 @@ public class MemcachedInputMeta extends BaseStepMeta implements StepMetaInterfac
     try {
       this.keyFieldName = rep.getStepAttributeString( id_step, "keyfield" );
       this.valueFieldName = rep.getStepAttributeString( id_step, "valuefield" );
-      this.valueTypeName = rep.getStepAttributeString( id_step, "valuetype" );
+      this.expirationTime = (int) rep.getStepAttributeInteger( id_step, "expiration" );
 
       int nrservers = rep.countNrStepAttributes( id_step, "server" );
 
@@ -245,7 +223,7 @@ public class MemcachedInputMeta extends BaseStepMeta implements StepMetaInterfac
 
     } catch ( Exception e ) {
       throw new KettleException( BaseMessages.getString( PKG,
-          "MemcachedInputMeta.Exception.UnexpectedErrorReadingStepInfo" ), e );
+          "MemcachedOutputMeta.Exception.UnexpectedErrorReadingStepInfo" ), e );
     }
   }
 
@@ -254,7 +232,7 @@ public class MemcachedInputMeta extends BaseStepMeta implements StepMetaInterfac
     try {
       rep.saveStepAttribute( id_transformation, id_step, "keyfield", this.keyFieldName );
       rep.saveStepAttribute( id_transformation, id_step, "valuefield", this.valueFieldName );
-      rep.saveStepAttribute( id_transformation, id_step, "valuetype", this.valueTypeName );
+      rep.saveStepAttribute( id_transformation, id_step, "expiration", this.expirationTime );
       int i = 0;
       Set<InetSocketAddress> servers = this.getServers();
       if ( servers != null ) {
@@ -265,7 +243,7 @@ public class MemcachedInputMeta extends BaseStepMeta implements StepMetaInterfac
       }
     } catch ( Exception e ) {
       throw new KettleException( BaseMessages.getString( PKG,
-          "MemcachedInputMeta.Exception.UnexpectedErrorSavingStepInfo" ), e );
+          "MemcachedOutputMeta.Exception.UnexpectedErrorSavingStepInfo" ), e );
     }
   }
 
