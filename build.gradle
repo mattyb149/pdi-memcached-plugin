@@ -17,6 +17,7 @@ project.ext.spymemcached_dependency_revision = '2.10.5'
 // kept in GitHub at pentaho/subfloor/master-copies/ivysettings.xml, but if we move to Maven
 // you will want to see the common POM.
 project.repositories {
+  
   ivy {
     url "http://repo.pentaho.org/artifactory/repo/"
     layout  "pattern", {
@@ -28,6 +29,7 @@ project.repositories {
   maven {
     url 'http://repo.pentaho.org/artifactory/repo'
   }
+  mavenLocal()
   mavenCentral()
 }
 
@@ -45,6 +47,7 @@ dependencies {
   compile("pentaho-kettle:kettle-engine:${project.ext.kettle_dependency_revision}")
   compile("pentaho-kettle:kettle-ui-swt:${project.ext.kettle_dependency_revision}")
   compile("pentaho:metastore:${project.ext.metastore_dependency_revision}")
+  compile("net.spy:spymemcached:${project.ext.spymemcached_dependency_revision}")
   
  
   // Put runtime dependencies here using the runtime() directive. Example:
@@ -54,7 +57,7 @@ dependencies {
   // any overrides of JARs in the normal Kettle classloader. Example:
   //runtimeWithoutCompile("com.tinkerpop.blueprints:blueprints-core:${project.ext.blueprints_dependency_revision}")
   //runtimeWithoutCompile('com.fasterxml.jackson.core:jackson-core:2.1.2')
-  runtime("net.spy:spymemcached:${project.ext.spymemcached_dependency_revision}")
+  runtimeWithoutCompile("net.spy:spymemcached:${project.ext.spymemcached_dependency_revision}")
   
   compile fileTree(dir: 'lib-dist', include: '*.jar')
   runtimeWithoutCompile fileTree(dir: 'lib-dist', include: '*.jar')

@@ -22,7 +22,13 @@
 
 package org.pentaho.di.trans.steps.memcached;
 
+import java.net.InetSocketAddress;
+import java.util.Set;
+
+import net.spy.memcached.MemcachedClient;
+
 import org.pentaho.di.core.exception.KettleException;
+import org.pentaho.di.core.row.RowDataUtil;
 import org.pentaho.di.i18n.BaseMessages;
 import org.pentaho.di.trans.Trans;
 import org.pentaho.di.trans.TransMeta;
@@ -33,26 +39,79 @@ import org.pentaho.di.trans.step.StepMeta;
 import org.pentaho.di.trans.step.StepMetaInterface;
 
 /**
- * This step reads key/value pairs from a memcached instance
+ * The Memcached Input step looks up value objects, from the given key names, from memached server(s).
  * 
  */
 public class MemcachedInput extends BaseStep implements StepInterface {
   private static Class<?> PKG = MemcachedInputMeta.class; // for i18n purposes, needed by Translator2!! $NON-NLS-1$
+
+  protected MemcachedInputMeta meta;
+  protected MemcachedInputData data;
+
+  protected MemcachedClient memcachedClient = null;
 
   public MemcachedInput( StepMeta stepMeta, StepDataInterface stepDataInterface, int copyNr, TransMeta transMeta,
       Trans trans ) {
     super( stepMeta, stepDataInterface, copyNr, transMeta, trans );
   }
 
+  @Override
+  public boolean init( StepMetaInterface smi, StepDataInterface sdi ) {
+    if ( super.init( smi, sdi ) ) {
+      try {
+        // Create client and connect to memcached server(s)
+        Set<InetSocketAddress> servers = ( (MemcachedInputMeta) smi ).getServers();
+        // new InetSocketAddress( "localhost", 11211 )
+        memcachedClient = new MemcachedClient( servers.toArray( new InetSocketAddress[servers.size()] ) );
+
+        return true;
+      } catch ( Exception e ) {
+        logError( BaseMessages.getString( PKG, "MemcachedInput.Error.ConnectError" ), e );
+        return false;
+      }
+    } else {
+      return false;
+    }
+  }
+
   public boolean processRow( StepMetaInterface smi, StepDataInterface sdi ) throws KettleException {
+    meta = (MemcachedInputMeta) smi;
+    data = (MemcachedInputData) sdi;
+
     Object[] r = getRow(); // get row, set busy!
-    if ( r == null ) // no more input to be expected...
-    {
+
+    // If no more input to be expected, stop
+    if ( r == null ) {
       setOutputDone();
       return false;
     }
 
-    putRow( getInputRowMeta(), r ); // copy row to possible alternate rowset(s).
+    if ( first ) {
+      first = false;
+
+      // clone input row meta for now, we will change it (add or set inline) later
+      data.outputRowMeta = getInputRowMeta().clone();
+      // Get output field types
+      meta.getFields( data.outputRowMeta, getStepname(), null, null, this, repository, metaStore );
+
+    }
+
+    // Get value from memcached, don't cast now, be lazy. TODO change this?
+    int keyFieldIndex = getInputRowMeta().indexOfValue( meta.getKeyFieldName() );
+    Object fetchedValue = memcachedClient.get( (String) ( r[keyFieldIndex] ) );
+
+    // Add Value data name to output, or set value data if already exists
+    Object[] outputRowData = r;
+    int valueFieldIndex = getInputRowMeta().indexOfValue( meta.getValueFieldName() );
+    if ( valueFieldIndex < 0 || valueFieldIndex > outputRowData.length ) {
+      // Not found so add it
+      outputRowData = RowDataUtil.addValueData( r, getInputRowMeta().size(), fetchedValue );
+    } else {
+      // Update value in place
+      outputRowData[valueFieldIndex] = fetchedValue;
+    }
+
+    putRow( data.outputRowMeta, outputRowData ); // copy row to possible alternate rowset(s).
 
     if ( checkFeedback( getLinesRead() ) ) {
       if ( log.isBasic() )
