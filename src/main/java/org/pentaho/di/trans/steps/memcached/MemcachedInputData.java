@@ -1,8 +1,8 @@
-/*******************************************************************************
+/*! ******************************************************************************
  *
  * Pentaho Data Integration
  *
- * Copyright (C) 2002-2012 by Pentaho : http://www.pentaho.com
+ * Copyright (C) 2002-2013 by Pentaho : http://www.pentaho.com
  *
  *******************************************************************************
  *
@@ -22,23 +22,23 @@
 
 package org.pentaho.di.trans.steps.memcached;
 
+import org.pentaho.di.core.row.RowMetaInterface;
 import org.pentaho.di.trans.step.BaseStepData;
 import org.pentaho.di.trans.step.StepDataInterface;
 
-
 /**
- * @author Matt Burgess
- *
+ * @author Matt
+ * @since 24-jan-2005
  */
-public class MemcachedInputData extends BaseStepData implements StepDataInterface
-{
+public class MemcachedInputData extends BaseStepData implements StepDataInterface {
+  RowMetaInterface outputRowMeta;
 
-	/**
-	 * 
-	 */
-	public MemcachedInputData()
-	{
-		super();
-	}
+  public RowMetaInterface convertMeta;
+
+  public int linesWritten;
+
+  public MemcachedInputData() {
+    super();
+  }
 
 }

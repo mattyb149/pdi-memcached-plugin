@@ -1,8 +1,8 @@
-/*******************************************************************************
+/*! ******************************************************************************
  *
  * Pentaho Data Integration
  *
- * Copyright (C) 2002-2012 by Pentaho : http://www.pentaho.com
+ * Copyright (C) 2002-2013 by Pentaho : http://www.pentaho.com
  *
  *******************************************************************************
  *
@@ -22,7 +22,13 @@
 
 package org.pentaho.di.trans.steps.memcached;
 
+import java.util.List;
+
 import org.pentaho.di.core.exception.KettleException;
+import org.pentaho.di.core.row.RowDataUtil;
+import org.pentaho.di.core.row.RowMeta;
+import org.pentaho.di.core.row.ValueMetaInterface;
+import org.pentaho.di.core.util.StringUtil;
 import org.pentaho.di.i18n.BaseMessages;
 import org.pentaho.di.trans.Trans;
 import org.pentaho.di.trans.TransMeta;
@@ -33,32 +39,83 @@ import org.pentaho.di.trans.step.StepMeta;
 import org.pentaho.di.trans.step.StepMetaInterface;
 
 /**
- * This step reads key/value pairs from a memcached instance
- * 
+ * Generates a number of (empty or the same) rows
+ *
+ * @author Matt
+ * @since 4-apr-2003
  */
 public class MemcachedInput extends BaseStep implements StepInterface {
-  private static Class<?> PKG = MemcachedInputMeta.class; // for i18n purposes, needed by Translator2!! $NON-NLS-1$
+  private static Class<?> PKG = MemcachedInputMeta.class; // for i18n purposes, needed by Translator2!!
+
+  private MemcachedInputMeta meta;
+  private MemcachedInputData data;
 
   public MemcachedInput( StepMeta stepMeta, StepDataInterface stepDataInterface, int copyNr, TransMeta transMeta,
-      Trans trans ) {
+    Trans trans ) {
     super( stepMeta, stepDataInterface, copyNr, transMeta, trans );
+
+    meta = (MemcachedInputMeta) getStepMeta().getStepMetaInterface();
+    data = (MemcachedInputData) stepDataInterface;
   }
 
   public boolean processRow( StepMetaInterface smi, StepDataInterface sdi ) throws KettleException {
-    Object[] r = getRow(); // get row, set busy!
-    if ( r == null ) // no more input to be expected...
+    if ( data.linesWritten >= meta.getDataLines().size() ) // no more rows to be written
     {
       setOutputDone();
       return false;
     }
 
-    putRow( getInputRowMeta(), r ); // copy row to possible alternate rowset(s).
+    if ( first ) {
+      // The output meta is the original input meta + the
+      // additional constant fields.
 
-    if ( checkFeedback( getLinesRead() ) ) {
-      if ( log.isBasic() )
-        logBasic( BaseMessages.getString( PKG, "MemcachedInput.Log.LineNumber" ) + getLinesRead() );
+      first = false;
+      data.linesWritten = 0;
+
+      data.outputRowMeta = new RowMeta();
+      meta.getFields( data.outputRowMeta, getStepname(), null, null, this, repository, metaStore );
+
+      // Use these metadata values to convert data...
+      //
+      data.convertMeta = data.outputRowMeta.cloneToType( ValueMetaInterface.TYPE_STRING );
+    }
+
+    Object[] outputRowData = RowDataUtil.allocateRowData( data.outputRowMeta.size() );
+    List<String> outputLine = meta.getDataLines().get( data.linesWritten );
+
+    for ( int i = 0; i < data.outputRowMeta.size(); i++ ) {
+      if ( meta.isSetEmptyString()[i] ) {
+        // Set empty string
+        outputRowData[i] = StringUtil.EMPTY_STRING;
+      } else {
+
+        ValueMetaInterface valueMeta = data.outputRowMeta.getValueMeta( i );
+        ValueMetaInterface convertMeta = data.convertMeta.getValueMeta( i );
+        String valueData = outputLine.get( i );
+
+        outputRowData[i] = valueMeta.convertDataFromString( valueData, convertMeta, null, null, 0 );
+      }
+    }
+
+    putRow( data.outputRowMeta, outputRowData );
+    data.linesWritten++;
+
+    if ( log.isRowLevel() ) {
+      log.logRowlevel( toString(), BaseMessages.getString( PKG, "MemcachedInput.Log.Wrote.Row", Long
+        .toString( getLinesWritten() ), data.outputRowMeta.getString( outputRowData ) ) );
+    }
+
+    if ( checkFeedback( getLinesWritten() ) ) {
+      if ( log.isBasic() ) {
+        logBasic( BaseMessages.getString( PKG, "MemcachedInput.Log.LineNr", Long.toString( getLinesWritten() ) ) );
+      }
     }
 
     return true;
   }
+
+  public boolean isWaitingForData() {
+    return true;
+  }
+
 }
